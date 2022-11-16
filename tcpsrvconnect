@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+#version: 0.1.0
+
+usage(){
+  NAME=$(basename "$0")
+  EMPT="${NAME//?/ }"
+  echo "\
+usage: $NAME [ -h | --help ]
+       $EMPT [ -p | --proto protocol ]
+       $EMPT [ -T | --try-default-first ]
+       $EMPT [ -t | --try-default-last ]
+       $EMPT [ --dig-args dig_args ]
+       $EMPT [ --nc-args nc_args ]
+       $EMPT [ --nc-cmd nc_cmd ]
+       $EMPT [ --fdpass ]
+       $EMPT [ --nofdpass ]
+       $EMPT service hostname [ port ]"
+}
+
+OPTARGS=$(getopt -o hp:Tt -l help,proto:,try-default-first,try-default-last,dig-args:,nc-args:,nc-cmd:,fdpass,nofdpass -- "${@}")
+[ $? -eq 0 ] || {
+    usage
+    exit 2
+}
+
+set -e
+
+eval set -- "${OPTARGS}"
+
+PROTO="_tcp"
+NCCMD="nc"
+
+TRYDEF=""
+DIGARGS=""
+NCARGS=""
+
+while :; do
+  case "$1" in
+    -h | --help) usage ; exit 0 ;;
+    -p | --proto) PROTO="$2" ; shift 1 ;;
+    -T | try-default-first) TRYDEF="first" ;;
+    -t | try-default-last) TRYDEF="last" ;;
+    --dig-args) DIGARGS="$2" ; shift 1 ;;
+    --nc-args) NCARGS="$2" ; shift 1 ;;
+    --nc-cmd) NCCMD="$2" ; shift 1 ;;
+    --fdpass) FDPASSMODE="-F" ;;
+    --nofdpass) FDPASSMODE="" ;;
+    --) shift ; break ;;
+  esac
+  shift
+done
+
+[ $# -gt 3 ] && {
+  echo "error: too many arguments"
+  usage
+  exit 2
+}
+
+[ $# -lt 2 ] && {
+  echo "error: not enough arguments"
+  usage
+  exit 2
+}
+
+[ -n "$TRYDEF" -a $# -lt 3 ] && {
+  echo "error: port must be specified with try-default options"
+  usage
+  exit 2
+}
+
+SERVICE="$1"
+HOSTNAME="$2"
+DEFPORT="$3"
+DEFAULT="$HOSTNAME $DEFPORT"
+
+FDPASSMODE=${FDPASSMODE-$([[ "$(readlink /proc/self/fd/0)" != socket:* ]] || echo "-F")}
+
+addresses(){
+  dig -r $DIGARGS +short "${SERVICE}"."${PROTO}"."${HOSTNAME}" SRV |
+    grep -v -E "^;" |
+    awk '{ print -$1" "$2" "$4" "$3 }' |
+    sort -nr |
+    cut -d ' ' -f 3,4
+}
+
+trap "exec 5<&- ; exec 6<&-" EXIT
+
+FD=""
+while :; do
+  if [ -z "$FD" -a "$TRYDEF" = "first" ] ; then
+    exec 5< <(echo "$DEFAULT")
+    FD="5"
+  elif [ "${FD:--1}" -ne "6" ] ; then
+    if [ "$TRYDEF" = "last" ]; then
+      exec 6< <(addresses ; echo "$DEFAULT")
+    else
+      exec 6< <(addresses)
+    fi
+    FD="6"
+  fi
+  read -u "$FD" -r LINE || break
+  "$NCCMD" $FDPASSMODE $NCARGS $LINE && exit 0
+done
+
+exit 1
