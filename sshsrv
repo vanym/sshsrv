@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#version: 0.1.0
+
+FDPASSMODE=""
+[ "$(: | nc -h 2>&1 | grep -E -- '-F\s+Pass socket fd' | head -1 | wc -l)" -eq 0 ] ||
+  FDPASSMODE='-o ProxyUseFdpass=yes'
+
+exec ssh $FDPASSMODE -o 'ProxyCommand tcpsrvconnect _ssh %h %p' "${@}"
