@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#version: 0.1.0
+#version: 0.1.1
 
 usage(){
   NAME=$(basename "$0")
@@ -9,6 +9,7 @@ usage: $NAME [ -h | --help ]
        $EMPT [ -p | --proto protocol ]
        $EMPT [ -T | --try-default-first ]
        $EMPT [ -t | --try-default-last ]
+       $EMPT [ -r | --trys trys_amount ]
        $EMPT [ --dig-args dig_args ]
        $EMPT [ --nc-args nc_args ]
        $EMPT [ --nc-cmd nc_cmd ]
@@ -18,7 +19,7 @@ usage: $NAME [ -h | --help ]
        $EMPT service hostname [ port ]"
 }
 
-OPTARGS=$(getopt -o hp:Tt -l help,version,proto:,try-default-first,try-default-last,dig-args:,nc-args:,nc-cmd:,fdpass,nofdpass -- "${@}")
+OPTARGS=$(getopt -o hp:Ttr: -l help,version,proto:,trys:,try-default-first,try-default-last,dig-args:,nc-args:,nc-cmd:,fdpass,nofdpass -- "${@}")
 [ $? -eq 0 ] || {
     usage
     exit 2
@@ -32,6 +33,7 @@ PROTO="_tcp"
 NCCMD="nc"
 
 TRYDEF=""
+TRYSLEFT=""
 DIGARGS=""
 NCARGS=""
 
@@ -39,14 +41,15 @@ while :; do
   case "$1" in
     -h | --help) usage ; exit 0 ;;
     -p | --proto) PROTO="$2" ; shift 1 ;;
-    -T | try-default-first) TRYDEF="first" ;;
-    -t | try-default-last) TRYDEF="last" ;;
+    -T | --try-default-first) TRYDEF="first" ;;
+    -t | --try-default-last) TRYDEF="last" ;;
+    -r | --trys) TRYSLEFT="$2" ; shift 1 ;;
     --dig-args) DIGARGS="$2" ; shift 1 ;;
     --nc-args) NCARGS="$2" ; shift 1 ;;
     --nc-cmd) NCCMD="$2" ; shift 1 ;;
     --fdpass) FDPASSMODE="-F" ;;
     --nofdpass) FDPASSMODE="" ;;
-    --version) NAME=$(basename "$0") ; echo "$NAME 0.1.0" ; exit 0 ;;
+    --version) NAME=$(basename "$0") ; echo "$NAME 0.1.1" ; exit 0 ;;
     --) shift ; break ;;
   esac
   shift
@@ -88,7 +91,7 @@ addresses(){
 trap "exec 5<&- ; exec 6<&-" EXIT
 
 FD=""
-while :; do
+while [ -z "$TRYSLEFT" ] || ((TRYSLEFT--)) ; do
   if [ -z "$FD" -a "$TRYDEF" = "first" ] ; then
     exec 5< <(echo "$DEFAULT")
     FD="5"
