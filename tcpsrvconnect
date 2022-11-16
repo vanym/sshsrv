@@ -14,10 +14,11 @@ usage: $NAME [ -h | --help ]
        $EMPT [ --nc-cmd nc_cmd ]
        $EMPT [ --fdpass ]
        $EMPT [ --nofdpass ]
+       $EMPT [ --version ]
        $EMPT service hostname [ port ]"
 }
 
-OPTARGS=$(getopt -o hp:Tt -l help,proto:,try-default-first,try-default-last,dig-args:,nc-args:,nc-cmd:,fdpass,nofdpass -- "${@}")
+OPTARGS=$(getopt -o hp:Tt -l help,version,proto:,try-default-first,try-default-last,dig-args:,nc-args:,nc-cmd:,fdpass,nofdpass -- "${@}")
 [ $? -eq 0 ] || {
     usage
     exit 2
@@ -45,6 +46,7 @@ while :; do
     --nc-cmd) NCCMD="$2" ; shift 1 ;;
     --fdpass) FDPASSMODE="-F" ;;
     --nofdpass) FDPASSMODE="" ;;
+    --version) NAME=$(basename "$0") ; echo "$NAME 0.1.0" ; exit 0 ;;
     --) shift ; break ;;
   esac
   shift
